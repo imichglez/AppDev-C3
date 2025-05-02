@@ -27,8 +27,20 @@ def categorize(ch: str):
 
 # — Tabla de transiciones según tu diagrama —
 T = {
-    0: {LPAREN:2, RPAREN:2, LBRACE:2, RBRACE:2, LBRACKET:2, RBRACKET:2, CHAR:1, DIGIT:3, DEL:0, OTHER:3},
-    1: {LPAREN:2, RPAREN:2, LBRACE:2, RBRACE:2, LBRACKET:2, RBRACKET:2, CHAR:1, DIGIT:1, DEL:2, OTHER:3},
+    0: {
+        CHAR: 1,
+        LPAREN: ACCEPT_STATE, RPAREN: ACCEPT_STATE,
+        LBRACE: ACCEPT_STATE, RBRACE: ACCEPT_STATE,
+        LBRACKET: ACCEPT_STATE, RBRACKET: ACCEPT_STATE,
+        DEL: ERROR_STATE,
+    },
+    1: {
+        CHAR: 1,
+        LPAREN: ACCEPT_STATE, RPAREN: ACCEPT_STATE,
+        LBRACE: ACCEPT_STATE, RBRACE: ACCEPT_STATE,
+        LBRACKET: ACCEPT_STATE, RBRACKET: ACCEPT_STATE,
+        DEL: ACCEPT_STATE,
+    },
 }
 
 # — Códigos de token para símbolos y palabras reservadas —
