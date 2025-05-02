@@ -1,153 +1,115 @@
-# lexical_analyzer.py
+ACCEPT_STATE = 2
+ERROR_STATE = 3
 
-import sys
+LPAREN, RPAREN, CHAR, DEL = range(4)
 
-# ————————————————————————————————
-# 1. Token IDs y palabras reservadas
-# ————————————————————————————————
-CLASS = 1
-LPAREN = 2
-RPAREN = 3
-LBRACE = 4
-RBRACE = 5
-THIS = 6
-NEW = 7
-IDENTIFIER = 20
+def categorize(ch: str): 
+    if ch == '(':
+        return LPAREN
+    elif ch == ')':
+        return RPAREN
+    elif ch.isalpha():
+        return CHAR
+    else:
+        return DEL
 
-# Palabras reservadas
-RESERVED = {"class": CLASS, "this": THIS, "new": NEW}
-
-# ————————————————————————————————
-# 2. Categorías de entrada para el DFA
-# ————————————————————————————————
-CAT_LETTER, CAT_WS, CAT_LP, CAT_RP, CAT_LB, CAT_RB, CAT_OTHER = range(7)
-
-# ————————————————————————————————
-# 3. Tabla de transiciones como diccionario
-#    (estado, categoría) → ('state', nuevo_estado)
-#                      o ('accept', token_id)
-#                      o ('error', None)
-# ————————————————————————————————
 T = {
-    (0, CAT_LETTER): ('state', 1),
-    (0, CAT_WS):     ('state', 0),
-    (0, CAT_LP):     ('accept', LPAREN),
-    (0, CAT_RP):     ('accept', RPAREN),
-    (0, CAT_LB):     ('accept', LBRACE),
-    (0, CAT_RB):     ('accept', RBRACE),
-
-    (1, CAT_LETTER): ('state', 1),
-    (1, CAT_WS):     ('accept', IDENTIFIER),
-    (1, CAT_LP):     ('accept', IDENTIFIER),
-    (1, CAT_RP):     ('accept', IDENTIFIER),
-    (1, CAT_LB):     ('accept', IDENTIFIER),
-    (1, CAT_RB):     ('accept', IDENTIFIER),
+    0: {LPAREN: ACCEPT_STATE, RPAREN: ACCEPT_STATE, CHAR: 1, DEL: ERROR_STATE},
+    1: {LPAREN: ACCEPT_STATE, RPAREN: ACCEPT_STATE, CHAR: 1, DEL: ACCEPT_STATE}
 }
 
-# ————————————————————————————————
-# 4. Funciones que replican el pseudocódigo
-# ————————————————————————————————
-def next_input_character(la):
-    """next_input_character(): devuelve siguiente carácter o None."""
-    if la.pos < len(la.text):
-        ch = la.text[la.pos]
-        la.pos += 1
-        return ch
-    return None
+# Set of recognizable tokens
+TOKENS = {
+    '(': 2, ')': 3, '{': 4, '}': 5
+}
 
-def unget_char(la):
-    """ungetchar(): retrocede un carácter."""
-    if la.pos > 0:
-        la.pos -= 1
+RESERVED_KEYWORDS = {
+    'class': 1, 'this': 6, 'new': 7
+}
 
-def categorize(ch):
-    """column(ch): mapea ch a una categoría."""
-    if   ch is None:      return CAT_OTHER
-    elif ch.isalpha():    return CAT_LETTER
-    elif ch.isspace():    return CAT_WS
-    elif ch == '(' :      return CAT_LP
-    elif ch == ')' :      return CAT_RP
-    elif ch == '{' :      return CAT_LB
-    elif ch == '}' :      return CAT_RB
-    else:                 return CAT_OTHER
+# Global variables
+input_text = ""
+pos = 0
+EOF = None
+tokens = []
+symbol_table = {}
+error_flag = False
+lexeme = ""
 
-def record_token(la, token_id, lexeme, category):
-    """record_Token(): construye y almacena el token en la lista."""
-    if token_id == IDENTIFIER:
-        text = lexeme or la.last_char
-        lw = text.lower()
-        if lw in RESERVED:
-            la.tokens.append((RESERVED[lw],))
+def next_input_character():
+    global pos
+    if pos < len(input_text):
+        c = input_text[pos]
+        pos += 1
+        return c
+    return EOF
+
+def Accept(state):
+    return state == ACCEPT_STATE
+
+def Error(state):
+    return state == ERROR_STATE
+
+def Advance(state, ch):
+    cat = categorize(ch)
+    nxt = T.get(state, {}).get(cat, ERROR_STATE)
+    return not (Accept(nxt) or Error(nxt))
+
+def record_Token(ch):
+    global lexeme, error_flag
+    if lexeme:
+        key = lexeme.lower()
+        if key in RESERVED_KEYWORDS:
+            tokens.append(RESERVED_KEYWORDS[key])
         else:
-            idx = la.symbol_table.setdefault(text, len(la.symbol_table) + 1)
-            la.tokens.append((IDENTIFIER, idx))
-        # si aceptamos IDENTIFIER al ver un símbolo, retrocede
-        if category in (CAT_LP, CAT_RP, CAT_LB, CAT_RB):
-            unget_char(la)
+            idx = symbol_table.setdefault(key, len(symbol_table) + 1)
+            tokens.append((20, idx))  # IDENTIFIER = 20
+        lexeme = ""
     else:
-        la.tokens.append((token_id,))
+        if ch in TOKENS:
+            tokens.append(TOKENS[ch])
+        else:
+            error_flag = True
 
-def error_message(la, ch):
-    """error_message(): maneja errores (aquí simplemente ignora)."""
-    # Opcional: print(f"Error: símbolo no reconocido '{ch}'")
+def error_message():
+    global error_flag
+    error_flag = True
 
-# ————————————————————————————————
-# 5. Scanner table-driven
-# ————————————————————————————————
-class LexicalAnalyzer:
-    def __init__(self, text):
-        self.text = text
-        self.pos = 0
-        self.tokens = []
-        self.symbol_table = {}
-        self.last_char = None
-
-    def scan(self):
-        ch = next_input_character(self)
-        while ch is not None:                 # while (!EOF)
-            state, lexeme = 0, ""
-            self.last_char = ch
-            while True:                       # while (!Accept && !Error)
-                col = categorize(ch)
-                action, val = T.get((state, col), ('error', None))
-                if action == 'error':
-                    error_message(self, ch)
-                    break
-                if action == 'accept':
-                    record_token(self, val, lexeme, col)
-                    break
-                # action == 'state'
-                if state == 1 or val == 1:
+# Main DFA loop
+def scan():
+    global lexeme
+    ch = next_input_character()
+    while ch != EOF:
+        state = 0
+        lexeme = ""
+        while not Accept(state) and not Error(state):
+            cat = categorize(ch)
+            state = T[state].get(cat, ERROR_STATE)
+            if Advance(state, ch):
+                if cat == CHAR:
                     lexeme += ch
-                state = val
-                ch = next_input_character(self)
-                self.last_char = ch
-                if ch is None and state == 1:  # EOF dentro de identificador
-                    record_token(self, IDENTIFIER, lexeme, col)
+                ch = next_input_character()
+                if ch == EOF:
                     break
-            ch = next_input_character(self)
-            self.last_char = ch
-        return self.tokens
 
-# ————————————————————————————————
-# 6. Main: entrada, escaneo y salida
-# ————————————————————————————————
+        if Accept(state):
+            record_Token(ch)
+            if ch not in TOKENS:
+                ch = next_input_character()
+        else:
+            error_message()
+        ch = next_input_character()
+
+# Example usage
 def main():
-    if len(sys.argv) < 2:
-        print("Uso: python lexical_analyzer.py archivo_fuente.txt")
-        return
-    with open(sys.argv[1], 'r', encoding='utf-8') as f:
-        text = f.read()
-
-    tokens = LexicalAnalyzer(text).scan()
-
-    # escribe cada token en output.txt
-    with open("output.txt", "w", encoding="utf-8") as outf:
-        for tid, *attr in tokens:
-            if tid == IDENTIFIER:
-                outf.write(f"<{IDENTIFIER},{attr[0]}>\n")
-            else:
-                outf.write(f"<{tid}>\n")
+    global input_text, pos
+    input_text = "(class new this)"
+    pos = 0
+    scan()
+    if error_flag:
+        print("ERROR")
+    else:
+        print("Tokens:", tokens)
 
 if __name__ == "__main__":
     main()
