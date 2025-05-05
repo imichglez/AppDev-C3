@@ -143,7 +143,11 @@ class Scanner():
                 self.error_message()
                 # Stop on error
                 break
-
+    def print_symbol_table(self):
+        """Prints the symbol table."""
+        print("Symbol Table:")
+        for token, id in self.symbol_entry.items():
+            print(f"{token}: {id}")
         
 def main():
     if len(sys.argv) < 2:
@@ -157,7 +161,9 @@ def main():
     sys.stdout = open("output.txt", "w", encoding="utf-8")
 
     try:
-        Scanner(input_text).scan()        # todo lo que imprima → output.txt
+        scanner = Scanner(input_text)
+        scanner.scan()        # todo lo que imprima → output.txt
+        scanner.print_symbol_table()  # Imprime la tabla de símbolos
     finally:
         sys.stdout.close()                # cerramos archivo
         sys.stdout = original_stdout      # restauramos stdout
