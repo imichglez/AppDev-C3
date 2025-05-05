@@ -1,180 +1,167 @@
-#!/usr/bin/env python3
 import sys
-import os
 
-# - Estados -
-START_STATE = 0
-ID_STATE = 1
 ACCEPT_STATE = 2
-ERROR_STATE = 3
+ERROR_STATE  = 3
 
-# - Categorías -
-LPAREN, RPAREN, LBRACE, RBRACE, LBRACKET, RBRACKET, CHAR, DIGIT, DEL, OTHER = range(10)
+# - Categorías para la tabla -
+LPAREN_ID, RPAREN_ID, LBRACE, RBRACE_ID, CHAR, DIGIT, DEL, BLANK = range(8)
 
-# - Tabla de transiciones corregida -
-T = {
-    START_STATE: {
-        CHAR: ID_STATE,
-        LPAREN: ACCEPT_STATE, RPAREN: ACCEPT_STATE,
-        LBRACE: ACCEPT_STATE, RBRACE: ACCEPT_STATE,
-        LBRACKET: ACCEPT_STATE, RBRACKET: ACCEPT_STATE,
-        DEL: ERROR_STATE,
-        OTHER: ERROR_STATE
-    },
-    ID_STATE: {
-        CHAR: ID_STATE,
-        DIGIT: ID_STATE,
-        LPAREN: ACCEPT_STATE, RPAREN: ACCEPT_STATE,
-        LBRACE: ACCEPT_STATE, RBRACE: ACCEPT_STATE,
-        LBRACKET: ACCEPT_STATE, RBRACKET: ACCEPT_STATE,
-        DEL: ACCEPT_STATE,
-        OTHER: ACCEPT_STATE  # Permite fin de input como aceptación
-    }
-}
+class Scanner():
+    def __init__(self, input_text):
+        
+        self.T = {
+            0: {
+                CHAR: 1,
+                BLANK: ACCEPT_STATE,
+                LPAREN_ID: ACCEPT_STATE, RPAREN_ID: ACCEPT_STATE,
+                LBRACE: ACCEPT_STATE, RBRACE_ID: ACCEPT_STATE,
+                DEL: ERROR_STATE,
+                DIGIT: ERROR_STATE,
+            },
+            1: {
+                CHAR: 1,
+                DIGIT: 1,
+                BLANK: ACCEPT_STATE,
+                LPAREN_ID: ACCEPT_STATE, RPAREN_ID: ACCEPT_STATE,
+                LBRACE: ACCEPT_STATE, RBRACE_ID: ACCEPT_STATE,
+                DEL: ACCEPT_STATE,
+            },
+        }
 
-# - Códigos de token -
-TOKEN_CODES = {'(':1, ')':2, '{':3, '}':4, '[':5, ']':6}
-RESERVED_KEYWORDS = {'class':7, 'this':8, 'new':9}
-ID_CODE = 20
+        self.TOKEN_CODES = {'(':1, ')':2, '{':3, '}':4}
+        self.RESERVED_KEYWORDS = {'class':7, 'this':8, 'new':9}
+        self.IDENTIFIER_ID = 20
 
-class Scanner:
-    def __init__(self, text):
-        self.text = text
-        self.pos = 0
-        self.tokens = []
-        self.symtab = {}
-        self.error = False
+        self.input_text = input_text
+        self.input_iterator = iter(input_text)  # Create iterator from input text
 
-    def categorize(self, ch):
-        if ch == '(': return LPAREN
-        elif ch == ')': return RPAREN
-        elif ch == '{': return LBRACE
-        elif ch == '}': return RBRACE
-        elif ch == '[': return LBRACKET
-        elif ch == ']': return RBRACKET
-        elif ch.isalpha() or ch == '_': return CHAR
-        elif ch.isdigit(): return DIGIT
-        elif ch.isspace(): return DEL
-        else: return OTHER
+        self.current_token = ""
+        self.ch = None
+
+        self.state = 0
+
+        self.symbol_entry = {}
+
+    def Accept(self, state: int) -> bool:
+        """Checks if the current state is an accepting state."""
+        return state == ACCEPT_STATE
+
+    def Error(self, state: int) -> bool:
+        """Checks if the current state is an error state."""
+        return state == ERROR_STATE
+        
+    def error_message(self):
+        """Handles lexical errors."""
+        print("ERROR")
+
+    def categorize(self, ch: str):
+        if ch is None:
+            return DEL
+        if ch == '(':        return LPAREN_ID
+        elif ch == ')':      return RPAREN_ID
+        elif ch == '{':      return LBRACE
+        elif ch == '}':      return RBRACE_ID
+        elif ch == ' ':      return BLANK
+        elif ch == '\n':     return BLANK
+        elif ch == '\t':     return BLANK
+        elif ch == '\r':     return BLANK
+        elif ch == '\f':     return BLANK
+        elif ch == '\v':     return BLANK
+        elif ch.isalpha() or ch == '_':
+            return CHAR
+        elif ch.isdigit():
+            return DIGIT
+        else:
+            return DEL
+        
+    def record_token(self):
+        # Make a substring from the initial token position to index
+        token = self.current_token.strip()
+
+        should_move_char = True
+        #Here I identify the las valid character
+        if len(self.current_token) > 1:
+            if self.current_token[-1] in [')', '(', '{', '}']:
+                should_move_char = False 
+            if self.categorize(self.current_token[-1]) != CHAR:
+                token = self.current_token[:-1]
+
+        # Check if the token is a reserved keyword
+        if token in self.RESERVED_KEYWORDS:
+            print(f"<{self.RESERVED_KEYWORDS[token]}>")
+
+        elif token in self.TOKEN_CODES:         # Check if the token is a special symbol
+            print(f"<{self.TOKEN_CODES[token]}>")
+
+        elif token == '': # Ignore empty tokens
+            # Ignore blank spaces
+            pass
+        else: # Identifier
+            
+            if token not in self.symbol_entry: # Generate a new entry
+                # Add the token to the symbol table
+                # and assign it a unique identifier
+                self.symbol_entry[token] = len(self.symbol_entry) + 1
+            print(f"<{self.IDENTIFIER_ID}, {self.symbol_entry[token]}>")
+
+        if should_move_char:
+            self.ch = self.next_input_character()
+
+    def Advance(self, state: int, ch: str) -> bool:
+        """Advances the scanner state and records the character."""
+        # If the state is error or accept, do not advance
+        if state == ERROR_STATE or state == ACCEPT_STATE:
+            return False
+        return True
+
+    def next_input_character(self):
+        """Returns the next character from the input string using iterator."""
+        try:
+            return next(self.input_iterator)
+        except StopIteration:
+            self.state = ACCEPT_STATE # End of input
+            return None
 
     def scan(self):
-        n = len(self.text)
-     
-        if n > 0 and self.text[0].isspace():
-            self.error = True
-            return self.tokens, self.symtab, self.error
-        
-        while self.pos < n and not self.error:
-            # Verificar si hay 2 o más espacios consecutivos
-            space_count = 0
-            pos_temp = self.pos
+        self.ch = self.next_input_character()
+        while self.ch is not None:  # not EOF
+            self.state = 0  # start DFA
+            self.current_token = ""  # reset token
+            while not self.Accept(self.state) and not self.Error(self.state):
+                self.current_token += self.ch
+                cat = self.categorize(self.ch)
+                self.state = self.T[self.state][cat]
+                
+                if self.Advance(self.state, self.ch):  # Updated to use self.ch
+                    self.ch = self.next_input_character()
             
-            while pos_temp < n and self.text[pos_temp] == ' ':
-                space_count += 1
-                pos_temp += 1
-                # Error si hay 2 o más espacios consecutivos
-                if space_count >= 2:
-                    self.error = True
-                    break
-            
-            if self.error:
-                break
+            # end of DFA
+            if self.Accept(self.state):
                 
-            # Saltar espacios (solo si es uno) y otros delimitadores
-            while self.pos < n and self.categorize(self.text[self.pos]) == DEL:
-                self.pos += 1
-            
-            if self.pos >= n: 
-                break
-
-            start_pos = self.pos
-            state = START_STATE
-            lexeme = ''
-
-            # Procesar token
-            while self.pos < n:
-                ch = self.text[self.pos]
-                cat = self.categorize(ch)
+                self.record_token()
                 
-                # Transición de estados
-                next_state = T.get(state, {}).get(cat, ERROR_STATE)
-                
-                # Si estamos en ID_STATE y encontramos un carácter que nos llevaría a ACCEPT_STATE
-                # (como un paréntesis), debemos detener el procesamiento del identificador actual
-                if state == ID_STATE and next_state == ACCEPT_STATE:
-                    break
-                
-                if next_state == ERROR_STATE:
-                    break
-                
-                # Acumular lexema
-                if next_state == ID_STATE:
-                    lexeme += ch
-                
-                state = next_state
-                self.pos += 1
-
-                # Detener si es estado de aceptación
-                if state == ACCEPT_STATE:
-                    break
-
-            # Manejar fin de input como aceptación para identificadores
-            if state == ID_STATE and self.pos >= n:
-                state = ACCEPT_STATE
-                lexeme = self.text[start_pos:self.pos]
-            # Si acabamos de salir porque encontramos un carácter que nos llevaría a ACCEPT_STATE
-            # pero no llegamos a procesar ese carácter (como un paréntesis después de un ID)
-            elif state == ID_STATE and T.get(state, {}).get(cat, ERROR_STATE) == ACCEPT_STATE:
-                state = ACCEPT_STATE
-                lexeme = self.text[start_pos:self.pos]
-                # No avanzamos el puntero aquí para que el próximo ciclo procese el símbolo
-
-            # Registrar token o error
-            if state == ACCEPT_STATE:
-                if lexeme:
-                    key = lexeme.lower()
-                    if key in RESERVED_KEYWORDS:
-                        self.tokens.append(RESERVED_KEYWORDS[key])
-                    else:
-                        idx = self.symtab.setdefault(lexeme, len(self.symtab)+1)
-                        self.tokens.append((ID_CODE, idx))
-                else:
-                    symbol = self.text[start_pos]
-                    if symbol in TOKEN_CODES:
-                        self.tokens.append(TOKEN_CODES[symbol])
-                        # Si procesamos un símbolo directamente, aseguramos que el puntero avance
-                        if self.pos == start_pos:
-                            self.pos += 1
             else:
-                self.error = True
+                self.error_message()
+                # Stop on error
                 break
 
-        return self.tokens, self.symtab, self.error
-
-# - Programa principal -
+        
 def main():
-    if len(sys.argv) != 2:
-        print("Uso: python lexical_analyzer.py <archivo_entrada>")
-        sys.exit(1)
-    
-    infile = sys.argv[1]
-    if not os.path.isfile(infile):
-        print(f"Error: no existe el archivo '{infile}'")
-        sys.exit(1)
+    if len(sys.argv) < 2:
+        print("Uso: python lexical_analyzer.py <archivo>")
+        return
 
-    text = open(infile, encoding='utf-8').read()
-    scanner = Scanner(text)
-    tokens, symtab, error = scanner.scan()
+    with open(sys.argv[1], encoding="utf-8") as f:
+        input_text = f.read()
 
-    with open('output.txt', 'w', encoding='utf-8') as f:
-        if error:
-            f.write("ERROR\n")
-        else:
-            for tok in tokens:
-                if isinstance(tok, tuple):
-                    f.write(f"<{tok[0]},{tok[1]}>\n")
-                else:
-                    f.write(f"<{tok}>\n")
+    original_stdout = sys.stdout          # guardamos stdout “normal”
+    sys.stdout = open("output.txt", "w", encoding="utf-8")
 
-if __name__ == '__main__':
+    try:
+        Scanner(input_text).scan()        # todo lo que imprima → output.txt
+    finally:
+        sys.stdout.close()                # cerramos archivo
+        sys.stdout = original_stdout      # restauramos stdout
+
+if __name__ == "__main__":
     main()
