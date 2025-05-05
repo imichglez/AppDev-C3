@@ -3,7 +3,6 @@ import sys
 ACCEPT_STATE = 2
 ERROR_STATE  = 3
 
-# - Categorías para la tabla -
 LPAREN_ID, RPAREN_ID, LBRACE, RBRACE_ID, CHAR, DIGIT, DEL, BLANK = range(8)
 
 class Scanner():
