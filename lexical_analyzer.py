@@ -11,24 +11,28 @@ class Scanner():
         self.T = {
             0: {
                 CHAR: 1,
-                BLANK: ACCEPT_STATE,
-                LPAREN_ID: ACCEPT_STATE, RPAREN_ID: ACCEPT_STATE,
-                LBRACE: ACCEPT_STATE, RBRACE_ID: ACCEPT_STATE,
-                DEL: ERROR_STATE,
-                DIGIT: ERROR_STATE,
+                BLANK: 0,
+                LPAREN_ID: ACCEPT_STATE, 
+                RPAREN_ID: ACCEPT_STATE,
+                LBRACE: ACCEPT_STATE, 
+                RBRACE_ID: ACCEPT_STATE,
+                DEL: 0,
+                DIGIT: 0,
             },
             1: {
                 CHAR: 1,
                 DIGIT: 1,
                 BLANK: ACCEPT_STATE,
-                LPAREN_ID: ACCEPT_STATE, RPAREN_ID: ACCEPT_STATE,
-                LBRACE: ACCEPT_STATE, RBRACE_ID: ACCEPT_STATE,
+                LPAREN_ID: ACCEPT_STATE, 
+                RPAREN_ID: ACCEPT_STATE,
+                LBRACE: ACCEPT_STATE, 
+                RBRACE_ID: ACCEPT_STATE,
                 DEL: ACCEPT_STATE,
             },
         }
 
         self.TOKEN_CODES = {'(':1, ')':2, '{':3, '}':4}
-        self.RESERVED_KEYWORDS = {'class':7, 'this':8, 'new':9}
+        self.RESERVED_KEYWORDS = {'class':7, 'if': 8, 'else':9, 'while': 10, 'for': 11}
         self.IDENTIFIER_ID = 20
 
         self.input_text = input_text
@@ -51,7 +55,8 @@ class Scanner():
         
     def error_message(self):
         """Handles lexical errors."""
-        print("ERROR")
+        # print("ERROR")
+        pass
 
     def categorize(self, ch: str):
         if ch is None:
@@ -80,7 +85,7 @@ class Scanner():
         should_move_char = True
         #Here I identify the las valid character
         if len(self.current_token) > 1:
-            if self.current_token[-1] in [')', '(', '{', '}']:
+            if self.current_token[-1] in self.TOKEN_CODES: # ! CHANGED
                 should_move_char = False 
             if self.categorize(self.current_token[-1]) != CHAR:
                 token = self.current_token[:-1]
@@ -108,10 +113,12 @@ class Scanner():
 
     def Advance(self, state: int, ch: str) -> bool:
         """Advances the scanner state and records the character."""
+        # If the state is 0, reset the current token
+        if state == 0:
+            self.current_token = ""
+
         # If the state is error or accept, do not advance
-        if state == ERROR_STATE or state == ACCEPT_STATE:
-            return False
-        return True
+        return not (self.Error(state) or self.Accept(state))
 
     def next_input_character(self):
         """Returns the next character from the input string using iterator."""
@@ -142,7 +149,7 @@ class Scanner():
             else:
                 self.error_message()
                 # Stop on error
-                break
+                # break
     def print_symbol_table(self):
         """Prints the symbol table."""
         print("Symbol Table:")
