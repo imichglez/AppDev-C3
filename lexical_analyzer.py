@@ -11,7 +11,7 @@ class Scanner():
         self.T = {
             0: {
                 CHAR: 1,
-                BLANK: ACCEPT_STATE,
+                BLANK: 0,
                 LPAREN_ID: ACCEPT_STATE, 
                 RPAREN_ID: ACCEPT_STATE,
                 LBRACE: ACCEPT_STATE, 
