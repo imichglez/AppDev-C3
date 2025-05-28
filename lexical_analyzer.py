@@ -32,7 +32,7 @@ class Scanner():
         }
 
         self.TOKEN_CODES = {'(':1, ')':2, '{':3, '}':4}
-        self.RESERVED_KEYWORDS = {'class':7, 'if': 8, 'else':9, 'while': 10, 'for': 11}
+        self.RESERVED_KEYWORDS = {'class':7}
         self.IDENTIFIER_ID = 20
 
         self.input_text = input_text
