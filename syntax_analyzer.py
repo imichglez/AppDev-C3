@@ -317,7 +317,7 @@ def ejecutar_analisis_completo(archivo_codigo):
     
     try:
         # Ejecutar el scanner (asumiendo que genera output.txt)
-        subprocess.run([sys.executable, "scanner.py", archivo_codigo], 
+        subprocess.run([sys.executable, "lexical_analyzer.py", archivo_codigo], 
                       check=True, capture_output=True)
         
         # Paso 2: Clasificar usando la salida del scanner
