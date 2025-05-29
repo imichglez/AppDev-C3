@@ -1,17 +1,8 @@
-class myclass {
-    int a;
-    float b;
-
-    void m1(int x) {
-        int c;
-
-        c = 5;
-        a = b*c + 10;
-
-        if (a > 5) {
-            a = 0;
-        } else {
-            a++;
+class Sistema {
+    procesar ( datos ) {
+        class Cache {
+            id buffer
         }
+        validar ( entrada )
     }
 }
