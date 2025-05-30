@@ -10,39 +10,58 @@ from syntax_analyzer import TokenParser, RecursiveDescentParser
 TEST_CASES = [
     {
         "name": "Target: OOP Classification",
-        "code": """class Animal {
-    id makeSound ( ) {
-        id soundType
-    }
+        # Simple class with a member variable - aiming for OOP only
+        "code": """class MyClass {
+    id myVariable
 }"""
     },
     {
         "name": "Target: PP Classification",
+        # Multiple standalone functions - aiming for PP
         "code": """id calculateSum ( id a id b ) {
     id sumResult
 }
+
 id printMessage ( id msg ) {
-    // print
+    // Some comment
+}
+
+id anotherFunction ( ) {
+    id temp
 }"""
     },
     {
         "name": "Target: HYB Classification",
+        # Contains both a class and a standalone function - aiming for HYB
         "code": """class DataProcessor {
-    id process ( ) {
-        id data
+    id processData ( id input ) {
+        id processed
     }
 }
+
 id setupSystem ( ) {
     id config
 }"""
     },
     {
         "name": "Target: TEXT Classification",
-        "code": """just_an_identifier
-another_one
-// a simple comment line
-// lexer might treat these as identifiers or ignore comments
-// parser should see no class/function structure."""
+        # Text with no keywords or structural symbols - aiming for TEXT
+        "code": """This is just some text.
+More text here.
+Identifiers like var1 var2.
+Punctuation . , ; ! ?
+Lines without programming structure.
+Not a function.
+"""
+    },
+    {
+        "name": "Faulty OOP Syntax (Expected < 100% Read)",
+        # Missing closing brace - designed to cause a syntax error
+        "code": """class {}
+    id myVariable
+    id anotherVar 
+    }
+""" 
     }
 ]
 
