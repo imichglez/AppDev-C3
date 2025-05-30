@@ -56,7 +56,7 @@ Not a function.
     },
     {
         "name": "Faulty OOP Syntax (Expected < 100% Read)",
-        # Missing closing brace - designed to cause a syntax error
+        # Missing id and closing brace - designed to cause a syntax error
         "code": """class {}
     id myVariable
     id anotherVar 
