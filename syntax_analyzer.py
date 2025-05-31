@@ -1,7 +1,5 @@
 import sys
 import os
-import re
-
 
 class TokenParser:
     """
@@ -143,33 +141,26 @@ class RecursiveDescentParser:
     def S_procedure(self):
         """
         S -> DCL S'
-        FIRST(S) = {class, id, {, (, ε}
+        First(S) = First(DCL) = {class, id}
+        S is not nullable.
         """
-        # Verificar First(S) antes de proceder
-        if self.current_token[0] in ["class", "id", "{", "("]:
-            # Para S -> DCL S'
-            # DCL es no-terminal, llamar procedimiento DCL
-            self.DCL_procedure()
-            # S' es no-terminal, llamar procedimiento S'
-            self.S_prime_procedure()
-        elif self.current_token[0] in ["$", "}"]:
-            # S puede derivar ε a través de DCL -> ε
+        if self.current_token[0] in ["class", "id"]:
             self.DCL_procedure()
             self.S_prime_procedure()
         else:
+            # Error: S must start with 'class' or 'id' based on the grammar
             self.best_match_recovery()
 
     def S_prime_procedure(self):
         """
         S' -> S | ε
-        FIRST+(S' -> S) = {class, id, {, (}
-        FIRST+(S' -> ε) = {$, }}
+        First+(S' -> S) = {class, id}
+        First+(S' -> ε) = Follow(S') = { $, } }
         """
-        if self.current_token[0] in ["class", "id", "{", "("]:
+        if self.current_token[0] in ["class", "id"]:
             # S' -> S
-            # S es no-terminal, llamar procedimiento S
             self.S_procedure()
-        elif self.current_token[0] in ["$", "}"]:
+        elif self.current_token[0] in ["$", "}"]: # Follow(S') for S' -> ε
             # S' -> ε
             return
         else:
@@ -177,134 +168,149 @@ class RecursiveDescentParser:
 
     def DCL_procedure(self):
         """
-        DCL -> class id { S } | id (TEXT) | TEXT DCL' | ε
+        DCL -> class id { S } | id DCL''
+        First+(DCL -> class id { S }) = {class}
+        First+(DCL -> id DCL'') = {id}
+        DCL is not nullable.
         """
         if self.current_token[0] == "class":
             # DCL -> class id { S }
-            # DETECCIÓN OOP: Clase encontrada
             self.clases_encontradas += 1
             self.update_best_match()
 
-            # Para all symbols of the RHS: class id { S }
             self.match("class")
             self.match("id")
             self.match("{")
-            # S es no-terminal, llamar procedimiento S
             self.S_procedure()
             self.match("}")
-
         elif self.current_token[0] == "id":
-            # Lookahead para distinguir entre DCL -> id (TEXT) y DCL -> TEXT DCL'
-            saved_pos = self.position
-            saved_token = self.current_token
+            # DCL -> id DCL''
+            self.match("id")
+            self.DCL_double_prime_procedure() # New procedure for DCL''
+        else:
+            # Error: DCL must start with 'class' or 'id'
+            self.best_match_recovery()
 
-            self.get_next_token()
-            if self.current_token[0] == "(":
-                # DCL -> id (TEXT)
-                # DETECCIÓN PP: Función encontrada
-                self.funciones_encontradas += 1
-                self.update_best_match()
+    def DCL_double_prime_procedure(self): # New procedure for DCL''
+        """
+        DCL'' -> (TEXT) DCL''' | TEXT DCL'
+        First+(DCL'' -> (TEXT) DCL''') = {(}
+        First(TEXT DCL') = (First(TEXT) - {ε}) U (if ε in First(TEXT) then First(DCL') else {})
+                         = {id} U First(DCL') (since TEXT is nullable)
+                         = {id} U {(, {, ε}} = {id, (, {, ε}
+        """
+        token = self.current_token[0]
 
-                # Restaurar posición
-                self.position = saved_pos
-                self.current_token = saved_token
+        if token == "(":
+            # Path: DCL'' -> (TEXT) DCL'''
+            # This is part of "id (params) body_or_nothing" structure from DCL -> id DCL''
+            self.funciones_encontradas += 1 # Count as function
+            self.update_best_match()
 
-                # Para all symbols of the RHS: id ( TEXT )
-                self.match("id")
-                self.match("(")
-                # TEXT es no-terminal, llamar procedimiento TEXT
-                self.TEXT_procedure()
-                self.match(")")
-            else:
-                # DCL -> TEXT DCL'
-                # Restaurar posición
-                self.position = saved_pos
-                self.current_token = saved_token
-
-                # Para all symbols of the RHS: TEXT DCL'
-                # TEXT es no-terminal, llamar procedimiento TEXT
-                self.TEXT_procedure()
-                # DCL' es no-terminal, llamar procedimiento DCL'
-                self.DCL_prime_procedure()
-
-        elif self.current_token[0] in ["{", "("]:
-            # DCL -> TEXT DCL' (donde TEXT -> ε)
-            # Para all symbols of the RHS: TEXT DCL'
+            self.match("(")
             self.TEXT_procedure()
+            self.match(")")
+            self.DCL_triple_prime_procedure()
+        elif token == "id":
+            # Path: DCL'' -> TEXT DCL' where TEXT starts with 'id'
+            # This is part of "id id ..." structure
+            self.TEXT_procedure() # Will consume 'id' and then TEXT'
             self.DCL_prime_procedure()
+        elif token == "{":
+            # Path: DCL'' -> TEXT DCL' where TEXT -> ε and DCL' starts with '{'
+            # This is part of "id {S}" structure
+            self.TEXT_procedure() # TEXT -> ε
+            self.DCL_prime_procedure() # DCL' -> {S} ...
+        # Case where DCL'' -> TEXT DCL' and TEXT -> ε and DCL' -> ε. So DCL'' -> ε.
+        # Check Follow(DCL'') = { class, id, $, } }
+        # 'id' and potential '(' '{' are handled by specific productions of TEXT or DCL'.
+        # Remaining tokens in Follow(DCL'') indicate DCL'' -> ε.
+        elif token in ["class", "$", "}"]: # Follow(DCL'') for DCL'' -> ε (via TEXT->ε and DCL'->ε)
+            self.TEXT_procedure()    # Must take TEXT -> ε path
+            self.DCL_prime_procedure() # Must take DCL' -> ε path
+        else:
+            self.best_match_recovery()
 
-        elif self.current_token[0] in ["$", "}"]:
-            # DCL -> ε según conjuntos corregidos
+    def DCL_triple_prime_procedure(self): # New procedure for DCL'''
+        """
+        DCL''' -> { S } | ε
+        First+(DCL''' -> { S }) = {{ }
+        First+(DCL''' -> ε) = Follow(DCL''') = { class, id, $, } }
+        """
+        if self.current_token[0] == "{":
+            # DCL''' -> { S }
+            self.match("{")
+            self.S_procedure()
+            self.match("}")
+        elif self.current_token[0] in ["class", "id", "$", "}"]: # Follow(DCL''') for DCL''' -> ε
+            # DCL''' -> ε
             return
         else:
             self.best_match_recovery()
 
-    def DCL_prime_procedure(self):
+    def DCL_prime_procedure(self): # Corrected version of existing DCL_prime_procedure
         """
-        Procedimiento para DCL' según framework del Recipe
         DCL' -> { S } | (TEXT) { S } | ε
+        First+(DCL' -> { S }) = {{ }
+        First+(DCL' -> (TEXT) { S }) = {( }
+        First+(DCL' -> ε) = Follow(DCL') = { class, id, $, } }
         """
         if self.current_token[0] == "{":
             # DCL' -> { S }
-            # Para all symbols of the RHS: { S }
             self.match("{")
-            # S es no-terminal, llamar procedimiento S
             self.S_procedure()
             self.match("}")
-
         elif self.current_token[0] == "(":
             # DCL' -> (TEXT) { S }
-            # DETECCIÓN PP: Función con parámetros
-            self.funciones_encontradas += 1
+            # This structure `(...) {S}` might also be counted as a function-like construct
+            self.funciones_encontradas += 1 # As per original code's intent
             self.update_best_match()
 
-            # Para all symbols of the RHS: ( TEXT ) { S }
             self.match("(")
-            # TEXT es no-terminal, llamar procedimiento TEXT
             self.TEXT_procedure()
             self.match(")")
             self.match("{")
-            # S es no-terminal, llamar procedimiento S
             self.S_procedure()
             self.match("}")
-
-        elif self.current_token[0] in ["class", "id", "{", "(", "$", "}"]:
-            # DCL' -> ε según Follow(DCL')
+        elif self.current_token[0] in ["class", "id", "$", "}"]: # Follow(DCL') for DCL' -> ε
+            # DCL' -> ε
             return
         else:
             self.best_match_recovery()
 
-    def TEXT_procedure(self):
+    def TEXT_procedure(self): # Corrected version
         """
-        Procedimiento para TEXT
         TEXT -> id TEXT' | ε
+        First+(TEXT -> id TEXT') = {id}
+        First+(TEXT -> ε) = Follow(TEXT) = { ), (, {, class, id, $, } }
         """
         if self.current_token[0] == "id":
             # TEXT -> id TEXT'
-            # Para all symbols of the RHS: id TEXT'
             self.match("id")
-            # TEXT' es no-terminal, llamar procedimiento TEXT'
             self.TEXT_prime_procedure()
-
-        elif self.current_token[0] in [")", "{", "(", "class", "id", "$", "}"]:
-            # TEXT -> ε según Follow(TEXT)
+        # Check for TEXT -> ε using Follow(TEXT).
+        # 'id' is already handled by the 'if' branch.
+        # So, for ε, current_token must be in Follow(TEXT) - {id}.
+        elif self.current_token[0] in [")", "(", "{", "class", "$", "}"]: # Follow(TEXT) excluding 'id'
+            # TEXT -> ε
             return
         else:
             self.best_match_recovery()
 
-    def TEXT_prime_procedure(self):
+    def TEXT_prime_procedure(self): # Corrected version
         """
-        Procedimiento para TEXT'
         TEXT' -> TEXT | ε
+        First(TEXT) = {id, ε}. If current_token is 'id', choose TEXT' -> TEXT.
+        First+(TEXT' -> ε) = Follow(TEXT') = { ), (, {, class, id, $, } }
         """
         if self.current_token[0] == "id":
             # TEXT' -> TEXT
-            # Para all symbols of the RHS: TEXT
-            # TEXT es no-terminal, llamar procedimiento TEXT
             self.TEXT_procedure()
-
-        elif self.current_token[0] in [")", "{", "(", "class", "id", "$", "}"]:
-            # TEXT' -> ε según Follow(TEXT')
+        # Check for TEXT' -> ε using Follow(TEXT').
+        # 'id' is handled by the 'if' branch.
+        # So, for ε, current_token must be in Follow(TEXT') - {id}.
+        elif self.current_token[0] in [")", "(", "{", "class", "$", "}"]: # Follow(TEXT') excluding 'id'
+            # TEXT' -> ε
             return
         else:
             self.best_match_recovery()
@@ -430,7 +436,9 @@ class RecursiveDescentParser:
 def leer_salida_scanner(archivo_scanner):
     """Lee la salida del analizador léxico"""
     try:
-        with open(archivo_scanner, "r", encoding="utf-8") as file:
+        # Convert relative path to absolute path
+        archivo_absoluto = os.path.abspath(archivo_scanner)
+        with open(archivo_absoluto, "r", encoding="utf-8") as file:
             return file.read()
     except Exception:
         return None
@@ -464,13 +472,18 @@ def ejecutar_analisis_completo(archivo_codigo):
     import subprocess
 
     try:
+        # Convert relative path to absolute path
+        archivo_absoluto = os.path.abspath(archivo_codigo)
+        
         subprocess.run(
-            [sys.executable, "lexical_analyzer.py", archivo_codigo],
+            [sys.executable, "lexical_analyzer.py", archivo_absoluto],
             check=True,
             capture_output=True,
         )
 
-        paradigma, certeza, lectura = clasificar_desde_scanner("output.txt")
+        # Use absolute path for output.txt in current directory
+        output_path = os.path.abspath("output.txt")
+        paradigma, certeza, lectura = clasificar_desde_scanner(output_path)
         return paradigma, certeza, lectura
 
     except Exception:
@@ -479,28 +492,27 @@ def ejecutar_analisis_completo(archivo_codigo):
 
 def main():
     if len(sys.argv) != 2:
-        print("TEXT 80 100.0")
+        print("Uso: python syntax_analyzer.py <archivo_entrada>")
         sys.exit(0)
 
     archivo_entrada = sys.argv[1]
 
-    if not os.path.exists(archivo_entrada):
-        print("TEXT 85 100.0")
-        sys.exit(0)
-
     try:
-        with open(archivo_entrada, "r", encoding="utf-8") as f:
+        # Convert relative path to absolute path
+        archivo_absoluto = os.path.abspath(archivo_entrada)
+        
+        with open(archivo_absoluto, "r", encoding="utf-8") as f:
             contenido = f.read().strip()
 
         if contenido.startswith("<") and ">" in contenido:
-            paradigma, certeza, lectura = clasificar_desde_scanner(archivo_entrada)
+            paradigma, certeza, lectura = clasificar_desde_scanner(archivo_absoluto)
         else:
-            paradigma, certeza, lectura = ejecutar_analisis_completo(archivo_entrada)
+            paradigma, certeza, lectura = ejecutar_analisis_completo(archivo_absoluto)
 
         print(f"{paradigma} {certeza} {lectura}")
 
     except Exception:
-        print("TEXT 75 100.0")
+        print("Error al procesar el archivo")
 
 
 if __name__ == "__main__":
